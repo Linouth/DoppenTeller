@@ -6,3 +6,5 @@
 
 src/config.h
 server/logs
+server/.ipynb_checkpoints
+server/*.ipynb
