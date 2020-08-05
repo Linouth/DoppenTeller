@@ -57,7 +57,7 @@ uint32_t get_remote_caps() {
     Udp.write(MSG_GET_COUNT);
     Udp.endPacket();
 
-    delay(10);
+    delay(20);
 
     len = Udp.parsePacket();
     len = Udp.read(buf, 4);
@@ -171,7 +171,7 @@ void setup() {
     Serial.println(WiFi.localIP());
 
     Udp.begin(serverPort);
-    Udp.setTimeout(100);
+    Udp.setTimeout(250);
 
     sync_clock();
 
@@ -211,14 +211,14 @@ void loop() {
     val = analogRead(PIN_PHOTODIODE);
     digitalWrite(PIN_IRLED, LOW);
 
-    if (!cap_detected && val < 550) {
+    if (!cap_detected && val > 130) {
         // Peek dropped down
         Serial.println("Cap detected");
         cap_detected = true;
         add_cap(now());
 
         digitalWrite(PIN_STATUS, LOW);
-    } else if (cap_detected && val > 710) {
+    } else if (cap_detected && val < 70) {
         // Peek back up
         cap_detected = false;
         caps_synced = false;
@@ -244,5 +244,5 @@ void loop() {
     Udp.endPacket();
 #endif
 
-    delay(15);
+    delay(10);
 }
