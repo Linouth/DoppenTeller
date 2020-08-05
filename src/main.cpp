@@ -14,7 +14,7 @@ enum messages {
 };
 
 #define PIN_PHOTODIODE A0
-#define PIN_IRLED D2
+#define PIN_IRLED D8
 #define PIN_STATUS D4
 
 #define MAX_UDP_INTERVAL 10
@@ -28,14 +28,16 @@ typedef struct {
 capdata_t caps = { 0 };
 WiFiUDP Udp;
 
-void error() {
+bool is_synced_once = false;
+
+void error(uint wait) {
     bool led = LOW;
     Serial.println("ERROR");
 
     while (true) {
         digitalWrite(PIN_STATUS, led);
         led = !led;
-        delay(500);
+        delay(wait);
     }
 }
 
@@ -95,7 +97,7 @@ bool update_server() {
     } else if (remote_caps > caps.count) {
         Serial.printf("Something has gone wrong! remote_caps: %d, local_caps: %d\n",
                 remote_caps, caps.count);
-        error();
+        error(1000);
         return false;  // For clarity, never going to reach this
     } else {
         Serial.println("Server is up-to-date");
@@ -124,12 +126,14 @@ void sync_clock() {
     httpCode = http.GET();
     if (httpCode != HTTP_CODE_OK) {
         Serial.printf("Could not get current time from worldtimeapi.org: %d", httpCode);
-        error();
+        if (!is_synced_once)
+            error(500);
     }
     payload = http.getString();
     // Serial.println(payload);
     t = parse_time(payload);
     setTime(t + 3600*2);  // UTC+2 hacky fix
+    is_synced_once = true;
 }
 
 void store_capdata() {
@@ -183,7 +187,7 @@ void setup() {
 
 int val;
 bool cap_detected = false;
-bool caps_try_sync = true;
+bool caps_just_synced = false;
 bool clock_synced = false;
 void loop() {
     // Sync clock every morning
@@ -207,7 +211,7 @@ void loop() {
     val = analogRead(PIN_PHOTODIODE);
     digitalWrite(PIN_IRLED, LOW);
 
-    if (!cap_detected && val < 650) {
+    if (!cap_detected && val < 550) {
         // Peek dropped down
         Serial.println("Cap detected");
         cap_detected = true;
@@ -222,13 +226,23 @@ void loop() {
         digitalWrite(PIN_STATUS, HIGH);
     }
 
-    if (caps_try_sync && !caps_synced && second() == 0) {
+    // If new caps are available, try to sync them every minute
+    if (!caps_just_synced && !caps_synced && second() == 0) {
+        Serial.println("Syncing");
+#ifndef DEBUG
         store_capdata();
         caps_synced = update_server();
-        caps_try_sync = false;
+#endif
+        caps_just_synced = true;
     } else if (second() != 0) {
-        caps_try_sync = true;
+        caps_just_synced = false;
     }
+
+#ifdef DEBUG
+    Udp.beginPacket(serverAddr, serverPort);
+    Udp.printf("%d", val);
+    Udp.endPacket();
+#endif
 
     delay(15);
 }
