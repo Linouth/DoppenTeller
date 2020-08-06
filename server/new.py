@@ -5,14 +5,18 @@ PORT = 4444
 
 class Caps:
     count = 0
-    times = []
+    times = []  # Time in milliseconds since epoch
 
     def __init__(self, filename=None):
         self.filename = filename
 
-    def push(self, time):
-        self.times.append(time)
+    def push(self, time_tup):
+        self.times.append(time_tup[0]*1000 + time_tup[1])
         self.count += 1
+
+    def print(self):
+        for time in self.times:
+            print(time)
     
     def save(self):
         with open(self.filename, 'a') as f:
@@ -43,7 +47,7 @@ if __name__ == '__main__':
     try:
         while True:
             data, src = sock.recvfrom(1024)
-            # print(f'{src[0]}:{src[1]} - {data}')
+            print(f'{src[0]}:{src[1]} - {data}')
 
             if (len(data) < 1):
                 continue
@@ -56,15 +60,17 @@ if __name__ == '__main__':
 
             # Capdata received
             if len(data) > 1:
-                count = len(data)//4
-                print(f"Received {count-1} caps")
-                remote_capdata = struct.unpack('<'+'L'*count, data)
-                if (remote_capdata[0] > caps.count):
-                    for cap in remote_capdata[1:]:
+                count = (len(data)-4)//6
+                print(f"Received {count} caps")
+                remote_count = struct.unpack_from('<L', data)[0]
+                if remote_count > caps.count:
+                    remote_capdata = struct.iter_unpack('<LH', data[4:])
+                    for cap in remote_capdata:
                         caps.push(cap)
                     caps.save()
 
     except KeyboardInterrupt:
         caps.save()
+        caps.print()
         print('Closing')
         pass

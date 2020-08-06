@@ -6,6 +6,7 @@
 #include <ESP8266mDNS.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiUdp.h>
+#include <ArduinoOTA.h>
 
 #include "config.h"
 
@@ -20,9 +21,14 @@ enum messages {
 #define MAX_UDP_INTERVAL 10
 #define CAP_LIST_SIZE 30
 
+typedef struct __attribute__((__packed__)) time_m_ {
+    time_t time;
+    uint16_t millis;
+} time_m_t;
+
 typedef struct {
     uint32_t count;
-    time_t time[CAP_LIST_SIZE];
+    time_m_t times[CAP_LIST_SIZE];
 } capdata_t;
 
 capdata_t caps = { 0 };
@@ -41,11 +47,12 @@ void error(uint wait) {
     }
 }
 
-void add_cap(time_t time) {
+void add_cap(time_t time, uint32_t millis) {
     for (int i = 0; i < (CAP_LIST_SIZE-1); i++) {
-        caps.time[i+1] = caps.time[i];
+        caps.times[i+1] = caps.times[i];
     }
-    caps.time[0] = time;
+    caps.times[0].time = time;
+    caps.times[0].millis = millis;
     caps.count++;
 }
 
@@ -90,7 +97,7 @@ bool update_server() {
         // Server sends times from newest to oldest
         Udp.beginPacket(serverAddr, serverPort);
         Udp.write((uint8_t*)&caps.count, 4);
-        Udp.write((uint8_t*)&caps.time, 4*missing);
+        Udp.write((uint8_t*)&caps.times, 6*missing);
         Udp.endPacket();
 
         Serial.println("Done");
@@ -153,6 +160,15 @@ void load_capdata() {
     }
 }
 
+bool save_and_sync() {
+#ifndef DISABLE_CAP_UPDATE
+    store_capdata();
+    return update_server();
+#else
+    return true;
+#endif
+}
+
 bool caps_synced;
 void setup() {
     Serial.begin(115200);
@@ -170,6 +186,18 @@ void setup() {
     Serial.println("WiFi Connected!");
     Serial.println(WiFi.localIP());
 
+    ArduinoOTA.onStart([]() {
+        Serial.println("Force save and sync cap data");
+        save_and_sync();
+        Serial.println("Start OTA Update");
+    });
+    ArduinoOTA.onEnd([]() {
+        Serial.println("OTA End");
+        Serial.println("Rebooting...");
+    });
+    ArduinoOTA.setPassword(OTAPASS);
+    ArduinoOTA.begin();
+
     Udp.begin(serverPort);
     Udp.setTimeout(250);
 
@@ -180,16 +208,28 @@ void setup() {
     load_capdata();
 
     Serial.printf("Caps: %d, time[0] = %ld, time[1] = %ld, time[2] = %ld ...\n",
-            caps.count, caps.time[0], caps.time[1], caps.time[2]);
+            caps.count, caps.times[0].time, caps.times[1].time, caps.times[2].time);
 
     caps_synced = update_server();
 }
 
-int val;
+uint val;
+uint seconds;
 bool cap_detected = false;
 bool caps_just_synced = false;
 bool clock_synced = false;
+bool checked_for_update = false;
 void loop() {
+    seconds = second();
+
+    // Check for OTA update every 10 seconds
+    if (!checked_for_update && seconds%10 == 0) {
+        ArduinoOTA.handle();
+        checked_for_update = true;
+    } else if (seconds%10 != 0) {
+        checked_for_update = false;
+    }
+
     // Sync clock every morning
     if (hour() == 6){
         if (!clock_synced) {
@@ -207,19 +247,20 @@ void loop() {
         return;
     }
 
+    // Do measurement
     digitalWrite(PIN_IRLED, HIGH);
     val = analogRead(PIN_PHOTODIODE);
     digitalWrite(PIN_IRLED, LOW);
 
     if (!cap_detected && val > 130) {
-        // Peek dropped down
+        // Peak in measurement, cap detected
         Serial.println("Cap detected");
         cap_detected = true;
-        add_cap(now());
+        add_cap(now(), millis()%1000);
 
         digitalWrite(PIN_STATUS, LOW);
     } else if (cap_detected && val < 70) {
-        // Peek back up
+        // Peak back down
         cap_detected = false;
         caps_synced = false;
 
@@ -227,15 +268,16 @@ void loop() {
     }
 
     // If new caps are available, try to sync them every minute
-    if (!caps_just_synced && !caps_synced && second() == 0) {
+    if (!caps_just_synced && !caps_synced && seconds == 0) {
         Serial.println("Syncing");
-#ifndef DEBUG
-        store_capdata();
-        caps_synced = update_server();
-#endif
+        caps_synced = save_and_sync();
         caps_just_synced = true;
-    } else if (second() != 0) {
+    }
+
+    // Reset flags
+    if (seconds != 0) {
         caps_just_synced = false;
+        checked_for_update = false;
     }
 
 #ifdef DEBUG
