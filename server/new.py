@@ -23,7 +23,7 @@ class Caps:
 
     def push(self, time_tup):
         self.times.append(time_tup[0]*1000 + time_tup[1])
-        self.count += 1
+        # self.count += 1
 
     def print(self):
         for time in self.times:
@@ -99,6 +99,7 @@ if __name__ == '__main__':
                 print(f"Received {count} caps")
                 remote_count = struct.unpack_from('<L', data)[0]
                 if remote_count > caps.count:
+                    caps.count = remote_count
                     remote_capdata = struct.iter_unpack('<LH', data[4:])
                     for cap in remote_capdata:
                         caps.push(cap)

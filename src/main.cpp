@@ -205,6 +205,8 @@ void setup() {
 
     EEPROM.begin(256);
 
+    // caps.count = 106376;
+    // store_capdata();
     load_capdata();
 
     Serial.printf("Caps: %d, time[0] = %ld, time[1] = %ld, time[2] = %ld ...\n",
