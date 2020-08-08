@@ -60,6 +60,7 @@ class Caps:
             i -= 1
         #pprint.pprint(points)
         client.write_points(points, time_precision='ms')
+        self.times.clear()
 
     def _load_influx(self):
         client = self.filename
@@ -72,7 +73,7 @@ if __name__ == '__main__':
     client = InfluxDBClient('localhost', 8086, database='mydb')
     caps = Caps(filename=client)
 
-    #caps = Caps(filename='caps.csv')
+    # caps = Caps(filename='caps.csv')
     caps.load()
     print(f"Caps: {caps.count}")
 
