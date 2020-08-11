@@ -43,6 +43,7 @@ void error(uint wait) {
     while (true) {
         digitalWrite(PIN_STATUS, led);
         led = !led;
+        ArduinoOTA.handle();
         delay(wait);
     }
 }
@@ -205,12 +206,16 @@ void setup() {
 
     EEPROM.begin(256);
 
-    // caps.count = 106376;
+    // caps.count = 106385;
     // store_capdata();
     load_capdata();
 
     Serial.printf("Caps: %d, time[0] = %ld, time[1] = %ld, time[2] = %ld ...\n",
             caps.count, caps.times[0].time, caps.times[1].time, caps.times[2].time);
+    
+#ifdef DISABLE_CAP_UPDATE
+    Serial.println("!!! Update & sync has been disabled");
+#endif
 
     caps_synced = update_server();
 }
