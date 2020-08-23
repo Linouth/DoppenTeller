@@ -242,7 +242,12 @@ void setup() {
 
     EEPROM.begin(256);
 
-    // caps.count = 106385;
+    // caps.count = 106398;
+    // caps.times[0].time = 1597776068;
+    // caps.times[0].millis = 100;
+    // caps.times[1].time = 1597776068 - 30;
+    // caps.times[1].millis = 420;
+
     // store_capdata();
     load_capdata();
 
@@ -253,7 +258,7 @@ void setup() {
     Serial.println("!!! Update & sync has been disabled");
 #endif
 
-    caps_synced = update_server();
+    caps_synced = save_and_sync();
 }
 
 uint val;
@@ -313,6 +318,8 @@ void loop() {
     // If new caps are available, try to sync them every minute
     if (!caps_just_synced && !caps_synced && seconds == 0) {
         Serial.println("Syncing");
+        Serial.printf("Current caps: %d, time[0] = %ld, time[1] = %ld, time[2] = %ld ...\n",
+                caps.count, caps.times[0].time, caps.times[1].time, caps.times[2].time);
         caps_synced = save_and_sync();
         caps_just_synced = true;
     }

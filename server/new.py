@@ -54,7 +54,7 @@ class Caps:
                 'measurement': 'capcounter',
                 'time': time,
                 'fields': {
-                    'count': self.count - i
+                    'count': float(self.count - i)
                 }
             }]
             i -= 1
@@ -103,8 +103,11 @@ if __name__ == '__main__':
                     caps.count = remote_count
                     remote_capdata = struct.iter_unpack('<LH', data[4:])
                     for cap in remote_capdata:
+                        print(f"{cap}")
                         caps.push(cap)
                     caps.save()
+                else:
+                    print(f"Error: Remote {remote_count}, local {caps.count}")
 
     except KeyboardInterrupt:
         caps.save()
