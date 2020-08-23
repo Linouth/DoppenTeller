@@ -36,6 +36,11 @@ WiFiUDP Udp;
 
 bool is_synced_once = false;
 
+/**
+ * Something has gone wrong, set esp into watiing mode, and blink led to let
+ * the user know there has been an error.
+ * You can update the device OTA in this state
+ */
 void error(uint wait) {
     bool led = LOW;
     Serial.println("ERROR");
@@ -48,15 +53,24 @@ void error(uint wait) {
     }
 }
 
+/**
+ * Push a new timestamp to the cap stack
+ */
 void add_cap(time_t time, uint32_t millis) {
-    for (int i = 0; i < (CAP_LIST_SIZE-1); i++) {
-        caps.times[i+1] = caps.times[i];
+    // Shift every measurement by 1 (Starting at the back)
+    for (int i = CAP_LIST_SIZE-1; i > 0; i--) {
+        caps.times[i] = caps.times[i-1];
     }
+
+    // Save new measurement as first element
     caps.times[0].time = time;
     caps.times[0].millis = millis;
     caps.count++;
 }
 
+/**
+ * Request the currently known number of caps by the server
+ */
 uint32_t get_remote_caps() {
     char buf[4];
     int len;
@@ -75,6 +89,10 @@ uint32_t get_remote_caps() {
     return buf[0] | buf[1] << 8 | buf[2] << 16 | buf[3] << 24;
 }
 
+/**
+ * Check if server is up to date, and if not send the missing timestamps to the
+ * server.
+ */
 bool update_server() {
     uint32_t remote_caps = get_remote_caps();
     uint32_t missing;
@@ -114,6 +132,9 @@ bool update_server() {
     return true;
 }
 
+/**
+ * Helper function to parse the string returned from 'worldtimeapi.org'
+ */
 int parse_time(String str) {
     int start = str.indexOf("unixtime:");
     int end = str.indexOf("\n", start);
@@ -121,6 +142,11 @@ int parse_time(String str) {
     return out.toInt();
 }
 
+/**
+ * Sync the internal clock to the time returned by 'worldtimeapi.org'
+ * 
+ * TODO: Update this to use ntp instead of http
+ */
 void sync_clock() {
     WiFiClient client;
     HTTPClient http;
@@ -144,6 +170,9 @@ void sync_clock() {
     is_synced_once = true;
 }
 
+/**
+ * Store cap data into EEPROM
+ */
 void store_capdata() {
     uint8_t *p = (uint8_t*)&caps;
     
@@ -153,6 +182,9 @@ void store_capdata() {
     EEPROM.commit();
 }
 
+/**
+ * Load cap data from EEPROM
+ */
 void load_capdata() {
     uint8_t *p = (uint8_t*)&caps;
 
@@ -161,6 +193,10 @@ void load_capdata() {
     }
 }
 
+/**
+ * Helper function to more easily disable storing and syncing of cap data.
+ * Very useful for debugging
+ */
 bool save_and_sync() {
 #ifndef DISABLE_CAP_UPDATE
     store_capdata();
@@ -238,7 +274,7 @@ void loop() {
     }
 
     // Sync clock every morning
-    if (hour() == 6){
+    if (hour() == 6) {
         if (!clock_synced) {
             sync_clock();
             clock_synced = true;
@@ -260,7 +296,7 @@ void loop() {
     digitalWrite(PIN_IRLED, LOW);
 
     if (!cap_detected && val > 130) {
-        // Peak in measurement, cap detected
+        // Peak high, cap detected
         Serial.println("Cap detected");
         cap_detected = true;
         add_cap(now(), millis()%1000);
