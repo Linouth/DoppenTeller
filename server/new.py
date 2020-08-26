@@ -54,7 +54,7 @@ class Caps:
                 'measurement': 'capcounter',
                 'time': time,
                 'fields': {
-                    'count': float(self.count - i)
+                    'count': self.count - i
                 }
             }]
             i -= 1
